@@ -4,7 +4,7 @@ API NestJS pour une plateforme mettant en relation les Voyageurs/Conducteurs et 
 
 ## État du dépôt
 
-Le dépôt a été initialisé à partir des documents de spécification. Le contrat OpenAPI est un **brouillon** : il recense les opérations envisagées, mais plusieurs schémas de requête/réponse sont encore génériques et les règles métier restent à confirmer. Les endpoints métier ne sont pas encore implémentés ; seul le point de santé minimal est présent dans le squelette.
+Le dépôt a été initialisé à partir des documents de spécification. Le contrat OpenAPI est un **brouillon** : il recense les opérations envisagées, mais plusieurs schémas de requête/réponse sont encore génériques et les règles métier restent à confirmer. Pour le moment, seul le point de santé est un endpoint métier opérationnel. Le socle inclut aussi une validation globale des DTO et un filtre d’erreurs commun.
 
 ## Documents
 
@@ -30,11 +30,19 @@ npm run start:dev
 
 L'application lit le contrat depuis `openapi/openapi.yaml` au démarrage pour alimenter Swagger UI. Lancez-la depuis la racine du dépôt.
 
+## Validation et format des erreurs
+
+- `ValidationPipe` global : transformation des entrées, suppression interdite des champs inconnus et rejet des propriétés non déclarées dans les DTO.
+- `ApiExceptionFilter` : enveloppe d’erreur commune avec `success: false`, `error.code`, `error.message`, `error.details` et des métadonnées de requête.
+- Les erreurs internes renvoient un message générique au client ; les détails techniques sont consignés côté serveur.
+- Les DTO doivent utiliser les décorateurs de `class-validator` pour activer la validation des propriétés.
+
 ## Tests
 
 ```bash
 npm test
 npm run build
+npm run lint
 ```
 
 ## Architecture cible
