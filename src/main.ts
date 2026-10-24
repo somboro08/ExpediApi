@@ -1,14 +1,38 @@
+import {
+  BadRequestException,
+  ValidationPipe
+} from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { SwaggerModule } from '@nestjs/swagger';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parse } from 'yaml';
+import { ApiExceptionFilter } from './common/filters/api-exception.filter';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   app.setGlobalPrefix('v1');
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      forbidUnknownValues: true,
+      exceptionFactory: (errors) =>
+        new BadRequestException({
+          code: 'VALIDATION_FAILED',
+          message: 'Les données fournies sont invalides.',
+          details: errors.map((error) => ({
+            field: error.property,
+            issue: Object.values(error.constraints ?? {}).join('; ')
+          }))
+        })
+    })
+  );
+  app.useGlobalFilters(new ApiExceptionFilter());
 
   const contractPath = resolve(process.cwd(), 'openapi/openapi.yaml');
   const contractYaml = readFileSync(contractPath, 'utf8');
