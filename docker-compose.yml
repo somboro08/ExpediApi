@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: expediapi-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: expediapi
+      POSTGRES_USER: expediapi
+      POSTGRES_PASSWORD: expediapi_dev_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - expediapi_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U expediapi -d expediapi"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  expediapi_postgres_data:
