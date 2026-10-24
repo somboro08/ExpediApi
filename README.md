@@ -16,13 +16,43 @@ Le dépôt a été initialisé à partir des documents de spécification. Le con
 
 - Node.js 20+
 - npm
+- Docker Desktop (pour lancer PostgreSQL localement) ou un serveur PostgreSQL accessible
 
 ## Installation et lancement
 
+1. Créer le fichier d'environnement local :
+
+```bash
+cp .env.example .env
+```
+
+Sous PowerShell, si `cp` n'est pas disponible : `Copy-Item .env.example .env`.
+
+2. Démarrer PostgreSQL localement :
+
+```bash
+docker compose up -d postgres
+```
+
+3. Installer les dépendances (le client Prisma est généré via `postinstall`) :
+
 ```bash
 npm install
+```
+
+4. Créer et appliquer la migration initiale :
+
+```bash
+npx prisma migrate dev --name init
+```
+
+5. Démarrer l'API :
+
+```bash
 npm run start:dev
 ```
+
+Pour ouvrir Prisma Studio : `npm run db:studio`. Pour arrêter PostgreSQL : `docker compose down` (les données persistent dans le volume Docker).
 
 - API locale : `http://localhost:3000/v1`
 - Swagger UI : `http://localhost:3000/docs`
@@ -44,6 +74,14 @@ npm test
 npm run build
 npm run lint
 ```
+
+## Base de données (Prisma + PostgreSQL)
+
+- `prisma/schema.prisma` définit les modèles initiaux `User` et `Session`, les statuts de compte et les rôles provisoires.
+- `src/prisma/prisma.module.ts` expose le service Prisma globalement ; `src/prisma/prisma.service.ts` gère la connexion et la déconnexion.
+- `DATABASE_URL` est configurée dans `.env`. Ne jamais committer le fichier `.env` ou de vrais secrets.
+- Le schéma initial est un point de départ. Les règles d'attribution des rôles, la vérification e-mail/téléphone et la politique de sessions restent à valider avant d'implémenter l'authentification.
+- Après modification du schéma, utiliser `npx prisma migrate dev --name nom_de_migration` en développement et `npm run db:deploy` pour appliquer les migrations en déploiement.
 
 ## Architecture cible
 
