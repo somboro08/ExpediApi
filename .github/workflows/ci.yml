@@ -7,6 +7,8 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://expediapi:expediapi_dev_password@localhost:5432/expediapi?schema=public
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,6 +18,8 @@ jobs:
           node-version: 20
       - name: Install dependencies
         run: npm install
+      - name: Validate Prisma schema
+        run: npx prisma validate
       - name: Build
         run: npm run build
       - name: Test
