@@ -5681,11 +5681,22 @@ components:
               type: array
               items:
                 type: object
+                required: [field, issue]
                 properties:
                   field:
                     type: string
                   issue:
                     type: string
+        meta:
+          type: object
+          required: [path, timestamp]
+          properties:
+            path:
+              type: string
+              description: Chemin de la requête qui a échoué.
+            timestamp:
+              type: string
+              format: date-time
     UUID:
       type: string
       format: uuid
