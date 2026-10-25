@@ -67,6 +67,20 @@ export class AuthService {
     };
   }
 
+  async getCurrentUser(userId: string) {
+    const user = await this.prisma.user.findFirst({ where: { id: userId, deletedAt: null } });
+    if (!user) {
+      throw new UnauthorizedException({ code: 'USER_NOT_FOUND', message: 'Le compte associé à ce jeton n’existe plus.' });
+    }
+    if (user.status !== 'ACTIVE') {
+      throw new ForbiddenException({ code: 'ACCOUNT_NOT_ACTIVE', message: 'Ce compte n’est plus actif.' });
+    }
+    return {
+      id: user.id, email: user.email, phone: user.phone, firstName: user.firstName,
+      lastName: user.lastName, status: user.status, roles: user.roles, createdAt: user.createdAt
+    };
+  }
+
   async refresh(dto: RefreshTokenDto) {
     const tokenHash = this.hashRefreshToken(dto.refreshToken);
     const session = await this.prisma.session.findUnique({

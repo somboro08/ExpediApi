@@ -3,7 +3,7 @@ import { AuthService } from './auth.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
-  let authService: { register: jest.Mock };
+  let authService: { register: jest.Mock; getCurrentUser: jest.Mock };
   const createdAccount = {
     id: 'user-uuid',
     email: 'person@example.com',
@@ -16,7 +16,10 @@ describe('AuthController', () => {
   };
 
   beforeEach(() => {
-    authService = { register: jest.fn().mockResolvedValue(createdAccount) };
+    authService = {
+      register: jest.fn().mockResolvedValue(createdAccount),
+      getCurrentUser: jest.fn().mockResolvedValue(createdAccount)
+    };
     controller = new AuthController(authService as unknown as AuthService);
   });
 
@@ -31,6 +34,11 @@ describe('AuthController', () => {
       data: createdAccount
     });
     expect(authService.register).toHaveBeenCalledWith(dto);
+  });
+
+  it('returns the database-backed profile for the authenticated user', async () => {
+    await expect(controller.me({ sub: 'user-uuid', roles: [], iat: 1, exp: 2 })).resolves.toEqual({ success: true, data: createdAccount });
+    expect(authService.getCurrentUser).toHaveBeenCalledWith('user-uuid');
   });
 
   it('propagates service errors to the global exception filter', async () => {

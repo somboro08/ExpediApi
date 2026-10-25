@@ -43,8 +43,8 @@ export class AuthController {
   @Get('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Lire les informations du jeton d’accès courant' })
-  me(@CurrentUser() user: AuthenticatedRequest['user']) {
-    return { success: true, data: user };
+  @ApiOperation({ summary: 'Lire le profil du compte connecté' })
+  async me(@CurrentUser() user: AuthenticatedRequest['user']) {
+    return { success: true, data: await this.authService.getCurrentUser(user.sub) };
   }
 }

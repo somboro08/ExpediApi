@@ -79,6 +79,28 @@ describe('AuthService', () => {
     expect(prisma.session.create.mock.calls[0][0].data.refreshTokenHash).not.toBe(result.refreshToken);
   });
 
+  it('returns the current active user profile without sensitive fields', async () => {
+    prisma.user.findFirst.mockResolvedValue({
+      id: 'user-uuid', email: 'person@example.com', phone: null, firstName: 'Ada', lastName: 'Lovelace',
+      status: 'ACTIVE', roles: ['SENDER'], createdAt: new Date('2026-10-25T00:00:00.000Z'),
+      passwordHash: 'must-not-leak', deletedAt: null
+    });
+    const profile = await service.getCurrentUser('user-uuid');
+    expect(profile).toEqual(expect.objectContaining({ id: 'user-uuid', email: 'person@example.com', status: 'ACTIVE' }));
+    expect(profile).not.toHaveProperty('passwordHash');
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({ where: { id: 'user-uuid', deletedAt: null } });
+  });
+
+  it('rejects a profile request when the account is no longer active', async () => {
+    prisma.user.findFirst.mockResolvedValue({ id: 'user-uuid', status: 'SUSPENDED', deletedAt: null });
+    await expect(service.getCurrentUser('user-uuid')).rejects.toBeInstanceOf(ForbiddenException);
+  });
+
+  it('rejects a profile request for a deleted or missing account', async () => {
+    prisma.user.findFirst.mockResolvedValue(null);
+    await expect(service.getCurrentUser('user-uuid')).rejects.toBeInstanceOf(UnauthorizedException);
+  });
+
   it('requires an identifier for login', async () => {
     await expect(service.login({ password: 'some-password' })).rejects.toBeInstanceOf(BadRequestException);
   });
