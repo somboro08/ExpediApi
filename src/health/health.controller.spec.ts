@@ -1,8 +1,13 @@
 import { HealthController } from './health.controller';
 
 describe('HealthController', () => {
-  it('returns the service health', () => {
-    const controller = new HealthController();
+  let controller: HealthController;
+
+  beforeEach(() => {
+    controller = new HealthController();
+  });
+
+  it('returns a successful health response with the expected service name', () => {
     expect(controller.getHealth()).toEqual({
       success: true,
       data: {
@@ -10,5 +15,9 @@ describe('HealthController', () => {
         service: 'ExpediApi'
       }
     });
+  });
+
+  it('reports the status as ok', () => {
+    expect(controller.getHealth().data.status).toBe('ok');
   });
 });
