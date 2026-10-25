@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Ip, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, HttpStatus, Ip, Post, UnauthorizedException, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
@@ -45,6 +45,9 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Lire le profil du compte connecté' })
   async me(@CurrentUser() user: AuthenticatedRequest['user']) {
+    if (!user) {
+      throw new UnauthorizedException({ code: 'AUTHENTICATED_USER_REQUIRED', message: 'Un utilisateur authentifié est requis.' });
+    }
     return { success: true, data: await this.authService.getCurrentUser(user.sub) };
   }
 }
