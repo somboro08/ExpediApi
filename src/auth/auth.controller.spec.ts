@@ -37,7 +37,7 @@ describe('AuthController', () => {
   });
 
   it('returns the database-backed profile for the authenticated user', async () => {
-    await expect(controller.me({ sub: 'user-uuid', roles: [], iat: 1, exp: 2 })).resolves.toEqual({ success: true, data: createdAccount });
+    await expect(controller.me({ sub: 'user-uuid', sid: 'session-id', roles: [], iat: 1, exp: 2 })).resolves.toEqual({ success: true, data: createdAccount });
     expect(authService.getCurrentUser).toHaveBeenCalledWith('user-uuid');
   });
 
