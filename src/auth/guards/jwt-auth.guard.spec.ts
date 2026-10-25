@@ -1,10 +1,18 @@
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
+import { PrismaService } from '../../prisma/prisma.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 describe('JwtAuthGuard', () => {
   let guard: JwtAuthGuard;
   const secret = 'test-secret-that-is-at-least-thirty-two-characters';
+  const session = {
+    id: 'session-1',
+    user: { status: 'ACTIVE', deletedAt: null }
+  };
+  const prisma = {
+    session: { findFirst: jest.fn() }
+  } as unknown as PrismaService;
 
   const makeContext = (authorization?: string) => {
     const request: { headers: { authorization?: string }; user?: unknown } = { headers: { authorization } };
@@ -22,35 +30,78 @@ describe('JwtAuthGuard', () => {
     return `${header}.${body}.${signature}`;
   };
 
-  beforeEach(() => { process.env.JWT_ACCESS_SECRET = secret; guard = new JwtAuthGuard(); });
+  const claims = () => {
+    const now = Math.floor(Date.now() / 1000);
+    return { sub: 'user-1', sid: 'session-1', roles: ['SENDER'], iat: now, exp: now + 900 };
+  };
 
-  it('rejects missing bearer token', () => {
+  beforeEach(() => {
+    process.env.JWT_ACCESS_SECRET = secret;
+    jest.clearAllMocks();
+    prisma.session.findFirst = jest.fn().mockResolvedValue(session);
+    guard = new JwtAuthGuard(prisma);
+  });
+
+  it('rejects missing bearer token', async () => {
     const { context } = makeContext();
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
-  it('accepts a valid signed token and attaches its claims to the request', () => {
+  it('accepts a valid token when the session and account are active', async () => {
+    const payload = claims();
+    const { context, request } = makeContext(`Bearer ${sign(payload)}`);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(prisma.session.findFirst).toHaveBeenCalledWith({
+      where: { id: 'session-1', userId: 'user-1', revokedAt: null, expiresAt: { gt: expect.any(Date) } },
+      select: { id: true, user: { select: { status: true, deletedAt: true } } }
+    });
+    expect(request.user).toEqual(payload);
+  });
+
+  it('rejects a token signed with another secret', async () => {
+    const { context } = makeContext(`Bearer ${sign(claims(), 'different-secret')}`);
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    expect(prisma.session.findFirst).not.toHaveBeenCalled();
+  });
+
+  it('rejects expired tokens', async () => {
     const now = Math.floor(Date.now() / 1000);
-    const token = sign({ sub: 'user-1', roles: ['SENDER'], iat: now, exp: now + 900 });
-    const { context, request } = makeContext(`Bearer ${token}`);
-    expect(guard.canActivate(context)).toBe(true);
-    expect(request.user).toEqual({ sub: 'user-1', roles: ['SENDER'], iat: now, exp: now + 900 });
+    const { context } = makeContext(`Bearer ${sign({ ...claims(), iat: now - 1000, exp: now - 1 })}`);
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
-  it('rejects a token signed with another secret', () => {
-    const now = Math.floor(Date.now() / 1000);
-    const { context } = makeContext(`Bearer ${sign({ sub: 'user-1', roles: [], iat: now, exp: now + 900 }, 'different-secret')}`);
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+  it('rejects tokens without a session id', async () => {
+    const { sid: _sid, ...payload } = claims();
+    const { context } = makeContext(`Bearer ${sign(payload)}`);
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
-  it('rejects expired tokens', () => {
-    const now = Math.floor(Date.now() / 1000);
-    const { context } = makeContext(`Bearer ${sign({ sub: 'user-1', roles: [], iat: now - 1000, exp: now - 1 })}`);
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+  it('rejects missing, revoked, or expired sessions', async () => {
+    (prisma.session.findFirst as jest.Mock).mockResolvedValueOnce(null);
+    const { context } = makeContext(`Bearer ${sign(claims())}`);
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
-  it('rejects malformed tokens', () => {
+  it('rejects inactive accounts', async () => {
+    (prisma.session.findFirst as jest.Mock).mockResolvedValueOnce({
+      ...session,
+      user: { status: 'SUSPENDED', deletedAt: null }
+    });
+    const { context } = makeContext(`Bearer ${sign(claims())}`);
+    await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('rejects deleted accounts', async () => {
+    (prisma.session.findFirst as jest.Mock).mockResolvedValueOnce({
+      ...session,
+      user: { status: 'ACTIVE', deletedAt: new Date() }
+    });
+    const { context } = makeContext(`Bearer ${sign(claims())}`);
+    await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
+  });
+
+  it('rejects malformed tokens', async () => {
     const { context } = makeContext('Bearer not.a.valid-token');
-    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 });
