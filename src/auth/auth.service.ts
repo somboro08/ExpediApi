@@ -49,10 +49,9 @@ export class AuthService {
     }
     if (user.status !== 'ACTIVE') throw new ForbiddenException({ code: 'ACCOUNT_NOT_ACTIVE', message: 'Ce compte n’est pas encore actif.' });
 
-    const accessToken = this.createAccessToken(user);
     const refreshToken = this.newRefreshToken();
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    await this.prisma.session.create({
+    const session = await this.prisma.session.create({
       data: {
         userId: user.id,
         refreshTokenHash: this.hashRefreshToken(refreshToken),
@@ -61,6 +60,7 @@ export class AuthService {
         ipAddress: metadata.ipAddress?.slice(0, 64)
       }
     });
+    const accessToken = this.createAccessToken(user, session.id);
     return {
       accessToken, tokenType: 'Bearer', expiresIn: 900, refreshToken, refreshTokenExpiresAt: expiresAt,
       user: { id: user.id, email: user.email, phone: user.phone, firstName: user.firstName, lastName: user.lastName, status: user.status, roles: user.roles }
@@ -105,7 +105,7 @@ export class AuthService {
       throw new UnauthorizedException({ code: 'INVALID_REFRESH_TOKEN', message: 'Le jeton de renouvellement a déjà été utilisé ou est expiré.' });
     }
     return {
-      accessToken: this.createAccessToken(session.user),
+      accessToken: this.createAccessToken(session.user, session.id),
       tokenType: 'Bearer',
       expiresIn: 900,
       refreshToken: nextRefreshToken,
@@ -122,13 +122,13 @@ export class AuthService {
     return { loggedOut: true };
   }
 
-  private createAccessToken(user: { id: string; roles: string[] }): string {
+  private createAccessToken(user: { id: string; roles: string[] }, sessionId: string): string {
     const secret = process.env.JWT_ACCESS_SECRET;
     if (!secret || secret.length < 32) {
       throw new InternalServerErrorException({ code: 'AUTH_CONFIGURATION_ERROR', message: 'La configuration de l’authentification est incomplète.' });
     }
     const now = Math.floor(Date.now() / 1000);
-    return this.signAccessToken({ sub: user.id, roles: user.roles, iat: now, exp: now + 900 }, secret);
+    return this.signAccessToken({ sub: user.id, sid: sessionId, roles: user.roles, iat: now, exp: now + 900 }, secret);
   }
 
   private signAccessToken(payload: Record<string, unknown>, secret: string): string {
