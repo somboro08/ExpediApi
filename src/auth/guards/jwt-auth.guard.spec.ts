@@ -71,7 +71,8 @@ describe('JwtAuthGuard', () => {
   });
 
   it('rejects tokens without a session id', async () => {
-    const { sid: _sid, ...payload } = claims();
+    const payload: Record<string, unknown> = claims();
+    delete payload.sid;
     const { context } = makeContext(`Bearer ${sign(payload)}`);
     await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
