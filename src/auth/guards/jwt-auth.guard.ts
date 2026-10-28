@@ -70,7 +70,7 @@ export class JwtAuthGuard implements CanActivate {
         revokedAt: null,
         expiresAt: { gt: new Date() }
       },
-      select: { id: true, user: { select: { status: true, deletedAt: true } } }
+      select: { id: true, user: { select: { status: true, deletedAt: true, roles: true } } }
     });
 
     if (!session) {
@@ -80,10 +80,12 @@ export class JwtAuthGuard implements CanActivate {
       throw new ForbiddenException({ code: 'ACCOUNT_NOT_ACTIVE', message: 'Ce compte n’est plus actif.' });
     }
 
+    // Roles are read from the database, not trusted from the token, so role changes
+    // take effect on the next request even while an access token remains valid.
     request.user = {
       sub: payload.sub as string,
       sid: payload.sid as string,
-      roles: payload.roles as string[],
+      roles: session.user.roles,
       iat: payload.iat as number,
       exp: payload.exp as number
     };
