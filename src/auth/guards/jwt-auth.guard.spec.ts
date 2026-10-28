@@ -8,7 +8,7 @@ describe('JwtAuthGuard', () => {
   const secret = 'test-secret-that-is-at-least-thirty-two-characters';
   const session = {
     id: 'session-1',
-    user: { status: 'ACTIVE', deletedAt: null }
+    user: { status: 'ACTIVE', deletedAt: null, roles: ['SENDER'] }
   };
   const prisma = {
     session: { findFirst: jest.fn() }
@@ -47,15 +47,22 @@ describe('JwtAuthGuard', () => {
     await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
-  it('accepts a valid token when the session and account are active', async () => {
+  it('accepts a valid token and uses current roles from the database', async () => {
     const payload = claims();
     const { context, request } = makeContext(`Bearer ${sign(payload)}`);
     await expect(guard.canActivate(context)).resolves.toBe(true);
     expect(prisma.session.findFirst).toHaveBeenCalledWith({
       where: { id: 'session-1', userId: 'user-1', revokedAt: null, expiresAt: { gt: expect.any(Date) } },
-      select: { id: true, user: { select: { status: true, deletedAt: true } } }
+      select: { id: true, user: { select: { status: true, deletedAt: true, roles: true } } }
     });
     expect(request.user).toEqual(payload);
+  });
+
+  it('does not trust stale roles embedded in the access token', async () => {
+    const payload = { ...claims(), roles: ['ADMIN'] };
+    const { context, request } = makeContext(`Bearer ${sign(payload)}`);
+    await expect(guard.canActivate(context)).resolves.toBe(true);
+    expect(request.user).toEqual({ ...payload, roles: ['SENDER'] });
   });
 
   it('rejects a token signed with another secret', async () => {
@@ -86,7 +93,7 @@ describe('JwtAuthGuard', () => {
   it('rejects inactive accounts', async () => {
     (prisma.session.findFirst as jest.Mock).mockResolvedValueOnce({
       ...session,
-      user: { status: 'SUSPENDED', deletedAt: null }
+      user: { status: 'SUSPENDED', deletedAt: null, roles: ['SENDER'] }
     });
     const { context } = makeContext(`Bearer ${sign(claims())}`);
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
@@ -95,7 +102,7 @@ describe('JwtAuthGuard', () => {
   it('rejects deleted accounts', async () => {
     (prisma.session.findFirst as jest.Mock).mockResolvedValueOnce({
       ...session,
-      user: { status: 'ACTIVE', deletedAt: new Date() }
+      user: { status: 'ACTIVE', deletedAt: new Date(), roles: ['SENDER'] }
     });
     const { context } = makeContext(`Bearer ${sign(claims())}`);
     await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
